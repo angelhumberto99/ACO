@@ -41,34 +41,27 @@ def get_path():
                        float(stringAux[3])]) # feromonas
     file.close()
     return aux
-
-def get_visibility(path):
-    aux = []
-    keys = list(path.graph.keys())
-    for i in range(path.Length()):
-        auxDict = dict(path.graph[keys[i]])
-        subKeys = list(auxDict.keys()) 
-        subSize = len(auxDict)
-        for j in range(0, subSize):
-            aux.append(1/auxDict[subKeys[j]])
-    return aux                 
-
+           
 def explore(currentLoc, path):
     # obtenemos caminos y pesos
     paths = path.GetNeighbors(currentLoc)
     prob = []
     solutions = {}
+    # calculamos la probabilidad de
+    # seleccionar un camino
     for i in paths.keys():
         tau = paths[i][2]
         eta = paths[i][1]
-        prob.append(tau*eta)
+        prob.append(np.abs(tau)*np.abs(eta))
     summation = np.sum(prob)
     candidates = np.array(prob)
     candidates = candidates * (1/summation)
+    candidates = np.abs(candidates)
     pos = 0
     for i in paths.keys():
         solutions[candidates[pos]] = i
         pos += 1
+    # obtenemos el camino a seguir
     sel = selection(candidates)
     return solutions[sel]
 
@@ -85,6 +78,7 @@ def update_pheromones(path, antPath, lk):
     rho = 0.01 # taza de evaporación
     Q = 1 # aprendizaje
 
+    # creamos un grafo con antPath
     auxG = Graph(True)
     for i in range(len(antPath)):
         if i + 1 == len(antPath):
@@ -92,6 +86,7 @@ def update_pheromones(path, antPath, lk):
         else:
             auxG.CreateEdge(antPath[i],antPath[i+1],1)
 
+    # actualizamos el valor de las feromonas
     costs = []
     for i in path.graph.keys():
         neighbors = path.GetNeighbors(i)
@@ -104,6 +99,7 @@ def update_pheromones(path, antPath, lk):
     del auxG
     auxG = Graph(True)
     pos = 0
+    # actulizamos el grafo original
     for i in path.graph.keys():
         neighbors = path.GetNeighbors(i)
         for j in neighbors.keys():
@@ -111,19 +107,18 @@ def update_pheromones(path, antPath, lk):
             pos += 1
     return auxG
 
-
 def main():
     antPath = []
     pathSolution = []
     costSolution = []
 
-    x = list(range(100))
+    x = list(range(500))
     # caminos contiene (eta, tau, origen, destino y costo)
     path = get_path() 
     anthill = 1 # punto de partida
     food = 4 # objetivo
 
-    for i in range(100):
+    for i in range(500):
         # recorremos el camino desde el hormigero hasta la comida
         currentLoc = anthill
         while currentLoc != food:
@@ -132,12 +127,14 @@ def main():
         antPath.append(food)
         # guardamos la solución y costo total encontrada por iteración
         pathSolution.append(antPath[:])
+        # obtenemos la distancia recorrida por la hormiga
         finalCost = get_distance(antPath, path)
         costSolution.append(finalCost)
         #limpiamos la solución auxiliar
         path = update_pheromones(path, antPath, finalCost)
         antPath.clear()
     
+    # imprimimos las mejores y peores soluciones encontradas
     best = np.amin(costSolution)
     worst = np.amax(costSolution)
     for i in range(len(pathSolution)):
@@ -151,11 +148,12 @@ def main():
 
     print("costo promedio de soluciones: ", np.average(costSolution))
 
+    # graficamos los costos 
     fig = plt.figure(figsize=(5, 5))
     fig.tight_layout()
     plt1 = fig.add_subplot(1,1,1)
     plt1.plot(x, costSolution)
-    plt1.set_title("hormigas")
+    plt1.set_title("Optimizacion por colonia de hormigas")
     plt.show()
 
 if __name__ == "__main__":
