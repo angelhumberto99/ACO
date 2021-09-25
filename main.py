@@ -51,6 +51,8 @@ def explore(currentLoc, path):
     # seleccionar un camino
     for i in paths.keys():
         tau = paths[i][2]
+        if tau == 0:
+            tau = 0.001
         eta = paths[i][1]
         prob.append(np.abs(tau)*np.abs(eta))
     summation = np.sum(prob)
@@ -74,10 +76,8 @@ def get_distance(solution, path):
             costs += path.GetCost(solution[i],solution[i+1])[0]
     return costs
 
-def update_pheromones(path, antPath, lk):
-    rho = 0.01 # taza de evaporación
-    Q = 1 # aprendizaje
-
+def get_pheromones_costs(path, antPath, lk):
+    Q = 20 # aprendizaje
     # creamos un grafo con antPath
     auxG = Graph(True)
     for i in range(len(antPath)):
@@ -92,11 +92,25 @@ def update_pheromones(path, antPath, lk):
         neighbors = path.GetNeighbors(i)
         for j in neighbors.keys():
             if auxG.IsEdge(i,j):
-                costs.append(neighbors[j][:-1] + [(1 - rho)* neighbors[j][2] + Q/lk])
+                costs.append(neighbors[j][:-1] + [Q/lk])
             else:
-                costs.append(neighbors[j][:-1] + [(1 - rho)* neighbors[j][2]])
+                costs.append(neighbors[j][:-1] + [0])
 
-    del auxG
+    return costs
+
+def update_pheromones(path, lk):
+    rho = 0.01 # taza de evaporación
+    costs = lk[0]
+    for i in range(1, len(lk)):
+        for j in range(len(lk[i])):
+            costs[j][2] += lk[i][j][2]
+
+    # actualizamos el valor de las feromonas
+    for i in path.graph.keys():
+        neighbors = path.GetNeighbors(i)
+        for j in neighbors.keys():
+            costs[j][2] = (1 - rho)* neighbors[j][2] + costs[j][2]
+
     auxG = Graph(True)
     pos = 0
     # actulizamos el grafo original
@@ -111,28 +125,50 @@ def main():
     antPath = []
     pathSolution = []
     costSolution = []
+    lks = []
 
-    x = list(range(500))
-    # caminos contiene (eta, tau, origen, destino y costo)
+    gens = 100 # número de generaciones
+    ants = 10 # número de hormigas por generación
+    avg = 0 # costo promedio por generación
+    optimize = 0 # valor optimo de la función absoluta
+
+    # coordenadas
+    x = list(range(0, gens))
+    y = []
+
+    # path contiene (eta, tau, origen, destino y costo)
     path = get_path() 
+
     anthill = 1 # punto de partida
     food = 4 # objetivo
 
-    for i in range(500):
-        # recorremos el camino desde el hormigero hasta la comida
-        currentLoc = anthill
-        while currentLoc != food:
-            antPath.append(currentLoc)
-            currentLoc = explore(currentLoc, path)
-        antPath.append(food)
-        # guardamos la solución y costo total encontrada por iteración
-        pathSolution.append(antPath[:])
-        # obtenemos la distancia recorrida por la hormiga
-        finalCost = get_distance(antPath, path)
-        costSolution.append(finalCost)
-        #limpiamos la solución auxiliar
-        path = update_pheromones(path, antPath, finalCost)
-        antPath.clear()
+    for i in range(gens):
+        for i in range(ants):
+            # recorremos el camino desde el hormigero hasta la comida
+            currentLoc = anthill
+            while currentLoc != food:
+                antPath.append(currentLoc)
+                currentLoc = explore(currentLoc, path)
+            antPath.append(food)
+
+            # guardamos la solución y costo total encontrada por iteración
+            pathSolution.append(antPath[:])
+            # obtenemos la distancia recorrida por la hormiga
+            finalCost = get_distance(antPath, path)
+            costSolution.append(finalCost)
+
+            # guardamos el aporte de feromonas por hormiga
+            lks.append(get_pheromones_costs(path, antPath, finalCost))
+
+            #limpiamos la solución auxiliar
+            antPath.clear()
+            avg += abs(optimize - finalCost)
+        y.append(avg/ants)
+        avg = 0
+        # actualizamos el valor de las pheromonas
+        path = update_pheromones(path, lks[:])
+        lks.clear()
+
     
     # imprimimos las mejores y peores soluciones encontradas
     best = np.amin(costSolution)
@@ -152,7 +188,7 @@ def main():
     fig = plt.figure(figsize=(5, 5))
     fig.tight_layout()
     plt1 = fig.add_subplot(1,1,1)
-    plt1.plot(x, costSolution)
+    plt1.plot(x, y)
     plt1.set_title("Optimizacion por colonia de hormigas")
     plt.show()
 
